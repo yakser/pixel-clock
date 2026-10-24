@@ -8,7 +8,8 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response
 
-from settings import load_timezone
+from rendering import render_time_png
+from settings import RenderSettings, load_timezone
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,6 +30,8 @@ def create_app() -> FastAPI:
     version = metadata["project"]["version"]
     application = FastAPI(title="Pixel Clock", version=version, lifespan=lifespan)
 
+    application.state.render_settings = RenderSettings()
+
     @application.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -44,6 +47,20 @@ def create_app() -> FastAPI:
         timezone = request.app.state.timezone
         response.headers["Cache-Control"] = "no-store"
         return {"time": now.astimezone(timezone).strftime("%H:%M:%S"), "timezone": timezone.key}
+
+    @application.get(
+        "/time-png", response_class=Response, responses={200: {"content": {"image/png": {}}}}
+    )
+    async def get_time_png(
+        request: Request, now: Annotated[datetime, Depends(get_now)]
+    ) -> Response:
+        time_text = now.astimezone(request.app.state.timezone).strftime("%H:%M:%S")
+        snapshot = request.app.state.render_settings
+        return Response(
+            render_time_png(time_text, snapshot),
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
+        )
 
     return application
 
