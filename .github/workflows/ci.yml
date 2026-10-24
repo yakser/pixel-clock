@@ -1,0 +1,51 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.5"
+          python-version: "3.15.1"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Lint and test
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run python -m pytest -v
+      - name: Check dependency exports
+        run: |
+          uv export --locked --no-dev --no-emit-project --format requirements-txt -o requirements.txt
+          uv export --locked --only-group dev --no-emit-project --format requirements-txt -o requirements-dev.txt
+          git diff --exit-code -- requirements.txt requirements-dev.txt
+      - name: Assemble artifact
+        run: |
+          mkdir -p dist/pixel-clock/assets
+          cp .python-version app_final.py settings.py rendering.py pyproject.toml uv.lock \
+            requirements.txt requirements-dev.txt test_app.py README.md .env.example dist/pixel-clock/
+          cp assets/pixel-clock.png dist/pixel-clock/assets/
+      - name: Verify clean artifact installation
+        run: |
+          artifact_check_dir=$(mktemp -d)
+          cp -R dist/pixel-clock/. "$artifact_check_dir/"
+          cd "$artifact_check_dir"
+          uv sync --locked
+          uv run python -m pytest -v
+      - name: Upload application
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: pixel-clock
+          path: dist/pixel-clock/
+          include-hidden-files: true
+          if-no-files-found: error
