@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import tomllib
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -175,3 +177,116 @@ def test_png_single_clock_read(fixed_app):
     assert response.status_code == 200
     assert len(calls) == 1
     assert response.content == render_time_png("12:34:56", RenderSettings())
+
+
+def test_settings_partial(fixed_app):
+    with TestClient(fixed_app) as client:
+        response = client.patch("/settings", json={"foreground": "#00ff00", "scale": 6})
+        assert response.status_code == 200
+        assert response.json() == {"scale": 6, "foreground": "#00FF00", "background": "#000000"}
+        image = Image.open(BytesIO(client.get("/time-png").content))
+        assert image.size == (174, 42)
+        assert set(image.get_flattened_data()) == {(0, 255, 0), (0, 0, 0)}
+        assert client.patch("/settings", json={"background": "#ff00ff"}).json() == {
+            "scale": 6,
+            "foreground": "#00FF00",
+            "background": "#FF00FF",
+        }
+
+
+@pytest.mark.parametrize("scale", [1, 20])
+def test_settings_boundaries(fixed_app, scale):
+    with TestClient(fixed_app) as client:
+        response = client.patch("/settings", json={"scale": scale})
+        assert response.status_code == 200
+        assert response.json()["scale"] == scale
+        image = Image.open(BytesIO(client.get("/time-png").content))
+        assert image.size == (29 * scale, 7 * scale)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        *({"scale": scale} for scale in [0, 21, 1.5, 4.0, "4", True, None]),
+        *(
+            {field: color}
+            for field in ["foreground", "background"]
+            for color in ["red", "#FFF", "#GG0000", "#FFFFFF\n", 123, None]
+        ),
+        {"unknown": 1},
+        [],
+        {"scale": 6, "foreground": "bad"},
+    ],
+)
+def test_settings_invalid(fixed_app, payload):
+    with TestClient(fixed_app) as client:
+        initial = client.patch("/settings", json={})
+        assert initial.status_code == 200
+        response = client.patch("/settings", json=payload)
+        assert response.status_code == 422
+        assert client.patch("/settings", json={}).json() == initial.json()
+
+
+@pytest.mark.parametrize("body", ["", "{", "null", '"hello"'])
+def test_settings_invalid_body(fixed_app, body):
+    with TestClient(fixed_app) as client:
+        response = client.patch(
+            "/settings", content=body, headers={"Content-Type": "application/json"}
+        )
+        assert response.status_code == 422
+        assert client.patch("/settings", json={}).json() == {
+            "scale": 4,
+            "foreground": "#FFFFFF",
+            "background": "#000000",
+        }
+
+
+def test_settings_noop(fixed_app):
+    with TestClient(fixed_app) as client:
+        response = client.patch("/settings", json={})
+        assert response.status_code == 200
+        assert response.json() == {"scale": 4, "foreground": "#FFFFFF", "background": "#000000"}
+        assert client.patch("/settings", json={}).json() == response.json()
+
+
+def test_settings_same_colors(fixed_app):
+    with TestClient(fixed_app) as client:
+        assert client.patch("/settings", json={"foreground": "#000000"}).status_code == 200
+        image = Image.open(BytesIO(client.get("/time-png").content))
+        assert set(image.get_flattened_data()) == {(0, 0, 0)}
+
+
+def test_settings_isolated(fixed_app):
+    with TestClient(fixed_app) as first, TestClient(create_app()) as second:
+        assert first.patch("/settings", json={"scale": 9}).status_code == 200
+        assert first.patch("/settings", json={}).json()["scale"] == 9
+        assert second.patch("/settings", json={}).json()["scale"] == 4
+    with TestClient(create_app()) as restarted:
+        assert restarted.patch("/settings", json={}).json()["scale"] == 4
+
+
+def test_settings_concurrent(fixed_app):
+    async def exercise():
+        async with fixed_app.router.lifespan_context(fixed_app):
+            transport = httpx.ASGITransport(app=fixed_app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                responses = await asyncio.gather(
+                    client.patch("/settings", json={"scale": 7}),
+                    client.patch("/settings", json={"foreground": "#123456"}),
+                )
+                assert all(response.status_code == 200 for response in responses)
+                response = await client.patch("/settings", json={})
+                assert response.json() == {
+                    "scale": 7,
+                    "foreground": "#123456",
+                    "background": "#000000",
+                }
+
+    asyncio.run(exercise())
+
+
+def test_settings_log(fixed_app, caplog):
+    with caplog.at_level(logging.INFO), TestClient(fixed_app) as client:
+        assert client.patch("/settings", json={"scale": 8}).status_code == 200
+    assert "settings" in caplog.text.lower()
+    assert "8" in caplog.text

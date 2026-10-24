@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Request, Response
 
 from rendering import render_time_png
-from settings import RenderSettings, load_timezone
+from settings import RenderSettings, SettingsPatch, apply_patch, load_timezone
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -61,6 +61,13 @@ def create_app() -> FastAPI:
             media_type="image/png",
             headers={"Cache-Control": "no-store"},
         )
+
+    @application.patch("/settings")
+    async def update_settings(request: Request, patch: SettingsPatch) -> RenderSettings:
+        snapshot = apply_patch(request.app.state.render_settings, patch)
+        request.app.state.render_settings = snapshot
+        logger.info("Rendering settings updated: %s", snapshot.model_dump())
+        return snapshot
 
     return application
 
