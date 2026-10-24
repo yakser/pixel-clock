@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import tomllib
 from datetime import datetime
 from io import BytesIO
@@ -290,3 +291,24 @@ def test_settings_log(fixed_app, caplog):
         assert client.patch("/settings", json={"scale": 8}).status_code == 200
     assert "settings" in caplog.text.lower()
     assert "8" in caplog.text
+
+
+def test_color_schema_is_portable(fixed_app):
+    with TestClient(fixed_app) as client:
+        schemas = client.get("/openapi.json").json()["components"]["schemas"]
+    for model in ["RenderSettings", "SettingsPatch"]:
+        for field in ["foreground", "background"]:
+            color = schemas[model]["properties"][field]
+            assert r"\A" not in color["pattern"]
+            assert r"\z" not in color["pattern"]
+            assert color["minLength"] == color["maxLength"] == 7
+            for value, valid in [
+                ("#FFFFFF", True),
+                ("#00ff00", True),
+                ("red", False),
+                ("#FFF", False),
+                ("#FFFFFF\n", False),
+                ("A#FFFFFFz", False),
+            ]:
+                schema_accepts = len(value) == 7 and re.search(color["pattern"], value) is not None
+                assert schema_accepts == valid

@@ -4,7 +4,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-Color = Annotated[str, Field(pattern=r"\A#[0-9a-fA-F]{6}\z"), AfterValidator(str.upper)]
+Color = Annotated[
+    str, Field(pattern=r"^#[0-9a-fA-F]{6}$", min_length=7, max_length=7), AfterValidator(str.upper)
+]
 
 
 class RenderSettings(BaseModel):
