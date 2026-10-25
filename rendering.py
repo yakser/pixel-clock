@@ -4,6 +4,10 @@ from PIL import Image, ImageColor
 
 from settings import RenderSettings
 
+IMAGE_PADDING = 1
+GLYPH_GAP = 1
+TIME_LAYOUT = "00:00:00"
+
 GLYPHS = {
     "0": ("111", "101", "101", "101", "111"),
     "1": ("010", "110", "010", "010", "111"),
@@ -18,19 +22,36 @@ GLYPHS = {
     ":": ("0", "1", "0", "1", "0"),
 }
 
+BASE_IMAGE_WIDTH = (
+    sum(len(GLYPHS[character][0]) for character in TIME_LAYOUT)
+    + GLYPH_GAP * (len(TIME_LAYOUT) - 1)
+    + IMAGE_PADDING * 2
+)
+BASE_IMAGE_HEIGHT = len(GLYPHS["0"]) + IMAGE_PADDING * 2
+
+
+def image_size(scale: int) -> tuple[int, int]:
+    return BASE_IMAGE_WIDTH * scale, BASE_IMAGE_HEIGHT * scale
+
 
 def render_time_png(time_text: str, settings: RenderSettings) -> bytes:
-    image = Image.new("RGB", (29, 7), settings.background)
+    image = Image.new("RGB", (BASE_IMAGE_WIDTH, BASE_IMAGE_HEIGHT), settings.background)
     foreground = ImageColor.getrgb(settings.foreground)
-    offset = 1
+    offset = IMAGE_PADDING
+
     for character in time_text:
         glyph = GLYPHS[character]
-        for y, row in enumerate(glyph, start=1):
+
+        for y, row in enumerate(glyph, start=IMAGE_PADDING):
             for x, pixel in enumerate(row, start=offset):
                 if pixel == "1":
                     image.putpixel((x, y), foreground)
-        offset += len(glyph[0]) + 1
-    image = image.resize((29 * settings.scale, 7 * settings.scale), Image.Resampling.NEAREST)
+
+        offset += len(glyph[0]) + GLYPH_GAP
+
+    image = image.resize(image_size(settings.scale), Image.Resampling.NEAREST)
+
     output = BytesIO()
     image.save(output, format="PNG")
+
     return output.getvalue()
