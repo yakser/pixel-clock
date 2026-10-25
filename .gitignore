@@ -15,3 +15,7 @@ build/
 /docs/
 CLAUDE.md
 AGENTS.md
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/

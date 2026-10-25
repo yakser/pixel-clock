@@ -19,11 +19,34 @@ line-length = 100
 target-version = "py315"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = [
+    "E", "F", "I", "UP", "B", "A", "ASYNC", "C4", "DTZ",
+    "G", "LOG", "PTH", "PT", "RUF", "SIM",
+]
+
+[tool.mypy]
+python_version = "3.15"
+strict = true
+files = ["app_final.py", "settings.py", "rendering.py"]
+
+[tool.pytest.ini_options]
+addopts = ["--strict-config", "--strict-markers", "--cov", "--cov-report=term-missing"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["app_final", "settings", "rendering"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+precision = 2
 
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "mypy>=2.4,<3",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1,<8",
     "ruff>=0.17.2",
 ]

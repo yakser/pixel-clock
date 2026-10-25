@@ -61,7 +61,7 @@ def test_time_timezone(monkeypatch, fixed_app):
 
 
 @pytest.mark.parametrize(
-    "instant,expected",
+    ("instant", "expected"),
     [
         ("2026-03-29T00:59:59+00:00", "01:59:59"),
         ("2026-03-29T01:00:00+00:00", "03:00:00"),
@@ -77,9 +77,8 @@ def test_time_dst(monkeypatch, fixed_app, instant, expected):
 @pytest.mark.parametrize("zone", ["", "Not/AZone", "/etc/passwd", "../UTC"])
 def test_invalid_timezone(monkeypatch, zone):
     monkeypatch.setenv("PIXEL_CLOCK_TIMEZONE", zone)
-    with pytest.raises(ValueError, match="PIXEL_CLOCK_TIMEZONE"):
-        with TestClient(create_app()):
-            pass
+    with pytest.raises(ValueError, match="PIXEL_CLOCK_TIMEZONE"), TestClient(create_app()):
+        pass
 
 
 def test_startup_log(caplog):
@@ -115,7 +114,7 @@ def test_png_default(fixed_app):
     assert set(image.get_flattened_data()) == {(0, 0, 0), (255, 255, 255)}
 
 
-@pytest.mark.parametrize("scale,size", [(1, (29, 7)), (4, (116, 28)), (20, (580, 140))])
+@pytest.mark.parametrize(("scale", "size"), [(1, (29, 7)), (4, (116, 28)), (20, (580, 140))])
 def test_png_scaling(scale, size):
     image = Image.open(BytesIO(render_time_png("00:00:00", RenderSettings(scale=scale))))
     assert image.size == size
@@ -136,7 +135,7 @@ def test_png_scaling(scale, size):
 
 
 @pytest.mark.parametrize(
-    "digit,rows",
+    ("digit", "rows"),
     [
         ("0", ["111", "101", "101", "101", "111"]),
         ("1", ["010", "110", "010", "010", "111"]),
