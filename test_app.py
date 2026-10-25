@@ -289,8 +289,50 @@ def test_settings_concurrent(fixed_app):
 def test_settings_log(fixed_app, caplog):
     with caplog.at_level(logging.INFO), TestClient(fixed_app) as client:
         assert client.patch("/settings", json={"scale": 8}).status_code == 200
-    assert "settings" in caplog.text.lower()
-    assert "8" in caplog.text
+        caplog.clear()
+        response = client.patch("/settings", json={"foreground": "#00ff00"})
+    assert response.status_code == 200
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if "Rendering settings updated" in record.getMessage()
+    ]
+    assert len(messages) == 1
+    assert (
+        "old_settings={'scale': 8, 'foreground': '#FFFFFF', 'background': '#000000'}" in messages[0]
+    )
+    assert (
+        "new_settings={'scale': 8, 'foreground': '#00FF00', 'background': '#000000'}" in messages[0]
+    )
+
+
+def test_settings_invalid_does_not_log_update(fixed_app, caplog):
+    with caplog.at_level(logging.INFO), TestClient(fixed_app) as client:
+        response = client.patch("/settings", json={"scale": 100})
+    assert response.status_code == 422
+    assert "Rendering settings updated" not in caplog.text
+
+
+def test_png_log(fixed_app, caplog):
+    with caplog.at_level(logging.INFO), TestClient(fixed_app) as client:
+        assert (
+            client.patch("/settings", json={"scale": 6, "foreground": "#00ff00"}).status_code == 200
+        )
+        caplog.clear()
+        response = client.get("/time-png")
+    assert response.status_code == 200
+    image = Image.open(BytesIO(response.content))
+    messages = [
+        record.getMessage() for record in caplog.records if "PNG generated" in record.getMessage()
+    ]
+    assert len(messages) == 1
+    message = messages[0]
+    assert "settings={'scale': 6, 'foreground': '#00FF00', 'background': '#000000'}" in message
+    assert "time=01:04:05" in message
+    assert "timezone=Europe/Moscow" in message
+    assert f"width={image.width} height={image.height}" in message
+    assert "format=PNG mode=RGB" in message
+    assert f"bytes={len(response.content)}" in message
 
 
 def test_color_schema_is_portable(fixed_app):

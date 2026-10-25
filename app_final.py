@@ -56,17 +56,33 @@ def create_app() -> FastAPI:
     ) -> Response:
         time_text = now.astimezone(request.app.state.timezone).strftime("%H:%M:%S")
         snapshot = request.app.state.render_settings
+        png = render_time_png(time_text, snapshot)
+        logger.info(
+            "PNG generated: time=%s timezone=%s settings=%s "
+            "width=%s height=%s format=PNG mode=RGB bytes=%s",
+            time_text,
+            request.app.state.timezone.key,
+            snapshot.model_dump(),
+            29 * snapshot.scale,
+            7 * snapshot.scale,
+            len(png),
+        )
         return Response(
-            render_time_png(time_text, snapshot),
+            png,
             media_type="image/png",
             headers={"Cache-Control": "no-store"},
         )
 
     @application.patch("/settings")
     async def update_settings(request: Request, patch: SettingsPatch) -> RenderSettings:
-        snapshot = apply_patch(request.app.state.render_settings, patch)
+        previous = request.app.state.render_settings
+        snapshot = apply_patch(previous, patch)
         request.app.state.render_settings = snapshot
-        logger.info("Rendering settings updated: %s", snapshot.model_dump())
+        logger.info(
+            "Rendering settings updated: old_settings=%s new_settings=%s",
+            previous.model_dump(),
+            snapshot.model_dump(),
+        )
         return snapshot
 
     return application
