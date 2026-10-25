@@ -8,7 +8,9 @@
 Учебный FastAPI-сервис: текущее время в JSON и в виде пиксельного PNG.
 Цвета и размер изображения меняются через API.
 
-![Пример часов: 12:34:56](assets/pixel-clock.png)
+<p align="center">
+  <img src="assets/pixel-clock.png" alt="Пример часов: 12:34:56">
+</p>
 
 Пример PNG для `12:34:56` при `scale=12`.
 
