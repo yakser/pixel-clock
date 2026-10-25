@@ -19,7 +19,13 @@
 ## Установка
 
 Установите [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.13.5
-или новее. Склонируйте проект и установите зависимости:
+или новее (macOS/Linux):
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Откройте новый терминал, затем склонируйте проект и установите зависимости:
 
 ```sh
 git clone https://github.com/yakser/pixel-clock.git
